@@ -302,15 +302,58 @@
   .primary-btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); }
+
+  dialog.week-report { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 18px 20px; font-family: var(--sans); }
+  dialog.week-report::backdrop { background: rgba(12,18,32,0.55); }
+  dialog.stats-dlg { width: min(900px, calc(100vw - 32px)); }
+  .wr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .wr-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  table.wr-table { min-width: 0; }
+  .wr-table thead th { position: static; background: none; white-space: normal; text-align: right; cursor: default; }
+  .wr-table thead th:first-child { text-align: left; }
+  .wr-table thead th:hover { color: var(--ink-3); }
+  .wr-table th, .wr-table td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+  .wr-table th:first-child, .wr-table td:first-child { text-align: left; }
+  .wr-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .wr-table tr.wr-group td { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; padding-top: 14px; text-align: left; }
+  .wr-better { color: var(--good); } .wr-worse { color: var(--critical); } .wr-same { color: var(--ink-3); }
+  .wr-foot { margin-top: 12px; font-size: 12px; color: var(--ink-3); line-height: 1.5; }
+  .wr-sub { margin: 16px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); font-weight: 600; }
+  .copy-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); } .copy-btn.copied { color: var(--good); border-color: var(--good); }
+  .stats-dlg .wr-table { font-size: 12.5px; } .stats-dlg .wr-table th, .stats-dlg .wr-table td { padding: 6px 6px; }
+  @media (max-width: 640px) { .hide-sm { display: none; } dialog.week-report { overflow-x: hidden; } .wr-table { font-size: 12px; } .wr-table th, .wr-table td { padding: 6px 4px; } }
 </style>
 </head>
 <body>
 <div class="topbar" id="topbar" hidden>
   <span class="viewers" id="viewers"></span>
   <span id="viewerName"></span>
+  <button type="button" class="top-btn" id="weekReportBtn" title="Last two complete weeks, Sunday to Saturday">Last week</button>
+  <button type="button" class="top-btn" id="statsBtn" title="Weekly activity from the accounts that are at risk now, plus what the list looks like today">Stats</button>
   <button type="button" class="top-btn" id="themeBtn">Theme</button>
   <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
 </div>
+<dialog class="week-report" id="weekReport">
+  <div class="wr-head">
+    <h2 class="section-title" id="weekReportTitle">Last week</h2>
+    <span style="display:flex; gap:8px;">
+      <button type="button" class="copy-btn" id="weekReportCopy">Copy report</button>
+      <button type="button" class="copy-btn" id="weekReportClose">Close</button>
+    </span>
+  </div>
+  <div id="weekReportBody"><div class="wr-foot">Loading&hellip;</div></div>
+</dialog>
+<dialog class="week-report stats-dlg" id="statsDlg">
+  <div class="wr-head">
+    <h2 class="section-title" id="statsTitle">Stats</h2>
+    <span style="display:flex; gap:8px;">
+      <button type="button" class="copy-btn" id="statsCopy">Copy stats</button>
+      <button type="button" class="copy-btn" id="statsClose">Close</button>
+    </span>
+  </div>
+  <div id="statsBody"><div class="wr-foot">Loading&hellip;</div></div>
+</dialog>
 <div class="signin" id="signin" hidden>
   <div class="eyebrow">Customer Success &middot; At-Risk Customer Review</div>
   <h1>At-Risk Watch</h1>
@@ -1014,6 +1057,144 @@
     }
   });
 
+  var BOARD_FN = "at-risk-watch";
+  // ---------- Last week and Stats (supabase/at_risk_week.sql), loaded when the button is pressed ----------
+  // Weeks run Sunday to Saturday, Pacific. Ticket activity is for the accounts at risk NOW in the default view.
+  function wrDate(d) { var p = String(d).split("-"); return Number(p[1]) + "/" + Number(p[2]); }
+  function wrNum(v) { return v === null || v === undefined ? "n/a" : Number(v).toLocaleString(); }
+  function wrPct(a, b) { return b ? Math.round(1000 * a / b) / 10 + "%" : "n/a"; }
+  function wrChange(dir, cur, prev) {
+    if (cur === null || cur === undefined || prev === null || prev === undefined) return { text: "", cls: "wr-same" };
+    var d = cur - prev;
+    return { text: d === 0 ? "same" : (d > 0 ? "+" : "") + d.toLocaleString(), cls: d === 0 || !dir ? "wr-same" : (d > 0) === (dir > 0) ? "wr-better" : "wr-worse" };
+  }
+  function copyText(btn, text, label) {
+    function flash(ok) { btn.textContent = ok ? "Copied!" : "Copy failed"; btn.classList.toggle("copied", ok); setTimeout(function () { btn.textContent = label; btn.classList.remove("copied"); }, 1800); }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { flash(true); }).catch(function () { flash(false); });
+    else { try { var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0"; btn.closest("dialog").appendChild(ta); ta.select(); var ok = document.execCommand("copy"); ta.remove(); flash(ok); } catch (err) { flash(false); } }
+  }
+  function dlgFail(id, what, e) { document.getElementById(id).innerHTML = '<div class="wr-foot">Could not load ' + what + ': ' + escapeHtml(String(e && e.message || e)) + '</div>'; }
+  var WR = { weeks: null }, ST = { weeks: null };
+
+  var WR_ROWS = [
+    { label: "Tickets created", key: "created", dir: -1 },
+    { label: "Accounts with tickets", key: "accounts", dir: -1 },
+    { label: "Negative sentiment tickets", key: "negative", dir: -1 },
+    { label: "Tagged potential risk (frustration words)", key: "risk_tag", dir: -1 },
+    { label: "Escalated to Jira", key: "escalated", dir: -1 },
+    { label: "Bad CSAT ratings", key: "bad_csat", dir: -1 },
+    { label: "Tickets solved", key: "solved", dir: 1 }
+  ];
+  function wrMovement(c, p) {
+    var m = c.movement, pm = p ? p.movement : null;
+    if (!m) return null;
+    return [
+      { label: "At risk at the start of the week", cur: m.start, prev: pm ? pm.start : null, dir: 0 },
+      { label: "Newly at risk", cur: m["new"], prev: pm ? pm["new"] : null, dir: -1 },
+      { label: "No longer at risk", cur: m.cleared, prev: pm ? pm.cleared : null, dir: 1 },
+      { label: "At risk at the end of the week", cur: m.end, prev: pm ? pm.end : null, dir: -1 }
+    ];
+  }
+  function renderWeekReport() {
+    var w = WR.weeks, c = w[0], p = w[1] || null;
+    document.getElementById("weekReportTitle").textContent = "Last week: " + wrDate(c.start) + " to " + wrDate(c.end);
+    var h = '<table class="wr-table"><thead><tr><th></th><th>' + wrDate(c.start) + ' to ' + wrDate(c.end) + '</th>' + (p ? '<th>' + wrDate(p.start) + ' to ' + wrDate(p.end) + '</th><th>Change</th>' : '') + '</tr></thead><tbody>';
+    h += '<tr class="wr-group"><td colspan="4">Accounts at risk now (' + wrNum(c.population) + ' in the default view): ticket activity</td></tr>';
+    WR_ROWS.forEach(function (r) {
+      var ch = p ? wrChange(r.dir, c[r.key], p[r.key]) : null;
+      h += '<tr><td>' + r.label + '</td><td>' + wrNum(c[r.key]) + '</td>' + (p ? '<td>' + wrNum(p[r.key]) + '</td><td class="' + ch.cls + '">' + ch.text + '</td>' : '') + '</tr>';
+    });
+    h += '<tr><td>Negative share of tickets</td><td>' + wrPct(c.negative, c.created) + '</td>' + (p ? '<td>' + wrPct(p.negative, p.created) + '</td><td></td>' : '') + '</tr>';
+    var mv = wrMovement(c, p);
+    h += '<tr class="wr-group"><td colspan="4">Movement on the at-risk list</td></tr>';
+    if (mv) mv.forEach(function (r) {
+      var ch = p ? wrChange(r.dir, r.cur, r.prev) : null;
+      h += '<tr><td>' + r.label + '</td><td>' + wrNum(r.cur) + '</td>' + (p ? '<td>' + wrNum(r.prev) + '</td><td class="' + ch.cls + '">' + ch.text + '</td>' : '') + '</tr>';
+    });
+    else h += '<tr><td colspan="4" style="text-align:left; color:var(--ink-3)">Movement tracking started on Nov 24, 2026 and cannot be rebuilt for earlier weeks. The first complete week it covers is Nov 29 to Dec 5.</td></tr>';
+    h += '</tbody></table>';
+    if (c.top && c.top.length) {
+      h += '<div class="wr-sub">Most tickets last week</div><table class="wr-table"><thead><tr><th>Account</th><th>Tickets</th><th>Negative</th><th>Escalated</th></tr></thead><tbody>' +
+        c.top.map(function (a) { return '<tr><td>' + escapeHtml(a.name) + '</td><td>' + a.tickets + '</td><td>' + a.negative + '</td><td>' + a.escalated + '</td></tr>'; }).join("") + '</tbody></table>';
+    }
+    h += '<div class="wr-foot">Weeks run Sunday to Saturday, Pacific. Ticket activity counts tickets created that week by the accounts that are at risk today (not CSM-owned, not Low ARR), matched on Zendesk organization, so it shows what the current list has been doing. Negative sentiment is Zendesk\'s AI tone field. Bad CSAT counts ratings received that week on those tickets.</div>';
+    document.getElementById("weekReportBody").innerHTML = h;
+  }
+  function weekReportText() {
+    var w = WR.weeks, c = w[0], p = w[1] || null, L = [];
+    L.push("At-Risk Watch, last week: " + wrDate(c.start) + " to " + wrDate(c.end), "");
+    L.push("Accounts at risk now (default view): " + wrNum(c.population));
+    WR_ROWS.forEach(function (r) { L.push("- " + r.label + ": " + wrNum(c[r.key]) + (p ? " (prior " + wrNum(p[r.key]) + ")" : "")); });
+    L.push("- Negative share of tickets: " + wrPct(c.negative, c.created));
+    var mv = wrMovement(c, p);
+    L.push("", "Movement on the at-risk list");
+    if (mv) mv.forEach(function (r) { L.push("- " + r.label + ": " + wrNum(r.cur) + (p ? " (prior " + wrNum(r.prev) + ")" : "")); });
+    else L.push("- Not available yet (tracking started Nov 24, 2026).");
+    if (c.top && c.top.length) { L.push("", "Most tickets last week"); c.top.forEach(function (a) { L.push("- " + a.name + ": " + a.tickets + " tickets, " + a.negative + " negative, " + a.escalated + " escalated"); }); }
+    return L.join("\n");
+  }
+
+  // Stats: weekly table, plus what the at-risk list looks like today (from the snapshot already loaded)
+  function nowProfile() {
+    var rows = ROWS.filter(function (r) { return r[10] && !r[COLIDX.csm_owned] && r[2] !== "L"; });
+    var tiers = { critical: 0, elevated: 0 }, reasons = {}, owners = {}, status = {};
+    rows.forEach(function (r) {
+      var t = tier(r); if (t) tiers[t]++;
+      (r[12] || []).forEach(function (x) { reasons[x] = (reasons[x] || 0) + 1; });
+      var o = r[11] || "Unassigned"; owners[o] = (owners[o] || 0) + 1;
+      var hs = r[5] || "No status"; status[hs] = (status[hs] || 0) + 1;
+    });
+    function top(o, n) { return Object.keys(o).map(function (k) { return [k, o[k]]; }).sort(function (a, b) { return b[1] - a[1] || a[0].localeCompare(b[0]); }).slice(0, n); }
+    return { total: rows.length, tiers: tiers, reasons: top(reasons, 12), owners: top(owners, 10), status: top(status, 5) };
+  }
+  function renderStats() {
+    var w = ST.weeks, pr = nowProfile();
+    document.getElementById("statsTitle").textContent = "Stats: last " + w.length + " weeks";
+    var h = '<div class="wr-sub">Weekly ticket activity: ' + wrNum(w[0].population) + ' of the ' + pr.total + ' accounts at risk now that match a Zendesk organization</div><table class="wr-table"><thead><tr><th>Week</th><th>Tickets</th><th class="hide-sm">Accounts</th><th>Negative</th><th class="hide-sm">Neg %</th><th class="hide-sm">Risk tag</th><th>Escalated</th><th>Bad CSAT</th><th>At risk at end</th></tr></thead><tbody>';
+    w.forEach(function (x) {
+      h += '<tr><td>' + wrDate(x.week_start) + ' to ' + wrDate(x.week_end) + '</td><td>' + x.n + '</td><td class="hide-sm">' + x.accounts + '</td><td>' + x.negative + '</td><td class="hide-sm">' + wrPct(x.negative, x.n) + '</td><td class="hide-sm">' + x.risk_tag + '</td><td>' + x.escalated + '</td><td>' + x.bad_csat + '</td><td>' + wrNum(x.at_risk_end) + '</td></tr>';
+    });
+    h += '</tbody></table>';
+    h += '<div class="wr-sub">The at-risk list today (default view): ' + pr.total + ' accounts, ' + pr.tiers.critical + ' critical, ' + pr.tiers.elevated + ' elevated</div>';
+    h += '<table class="wr-table"><thead><tr><th>Signal</th><th>Accounts</th><th>Share</th></tr></thead><tbody>' +
+      pr.reasons.map(function (r) { return '<tr><td>' + escapeHtml(r[0]) + '</td><td>' + r[1] + '</td><td>' + wrPct(r[1], pr.total) + '</td></tr>'; }).join("") + '</tbody></table>';
+    h += '<table class="wr-table"><thead><tr><th>Account owner</th><th>At-risk accounts</th><th>Share</th></tr></thead><tbody>' +
+      pr.owners.map(function (r) { return '<tr><td>' + escapeHtml(r[0]) + '</td><td>' + r[1] + '</td><td>' + wrPct(r[1], pr.total) + '</td></tr>'; }).join("") + '</tbody></table>';
+    h += '<div class="wr-foot">Weeks run Sunday to Saturday, Pacific, complete weeks only. Ticket columns count tickets created that week by the accounts at risk today, so older weeks describe the current list, not the list as it was then. Accounts with no Zendesk organization linked to their Salesforce account are not counted. "At risk at end" is the number of at-risk accounts in the default view on the last recorded day of the week; it starts Nov 24, 2026 and fills in as weeks pass. Risk tag is the potential_risk frustration-word tag. Negative is Zendesk\'s AI sentiment (negative or very negative).</div>';
+    document.getElementById("statsBody").innerHTML = h;
+  }
+  function statsText() {
+    var w = ST.weeks, pr = nowProfile(), L = ["At-Risk Watch stats (accounts at risk now: " + pr.total + ", " + pr.tiers.critical + " critical, " + pr.tiers.elevated + " elevated)", "", "Weekly ticket activity"];
+    w.forEach(function (x) { L.push("- " + wrDate(x.week_start) + " to " + wrDate(x.week_end) + ": " + x.n + " tickets, " + x.accounts + " accounts, " + x.negative + " negative, " + x.risk_tag + " risk tag, " + x.escalated + " escalated, " + x.bad_csat + " bad CSAT" + (x.at_risk_end !== null && x.at_risk_end !== undefined ? ", " + x.at_risk_end + " at risk at week end" : "")); });
+    L.push("", "Signals on the list today"); pr.reasons.forEach(function (r) { L.push("- " + r[0] + ": " + r[1]); });
+    L.push("", "By account owner"); pr.owners.forEach(function (r) { L.push("- " + r[0] + ": " + r[1]); });
+    return L.join("\n");
+  }
+  document.getElementById("weekReportBtn").addEventListener("click", function () {
+    document.getElementById("weekReport").showModal();
+    if (WR.weeks) return;
+    BQEBoard.api(BOARD_FN + "?week=1").then(function (j) {
+      var w = (j.week_report || []).filter(function (x) { return x && x.start; });
+      if (!w.length) { document.getElementById("weekReportBody").innerHTML = '<div class="wr-foot">No weekly report is available yet.</div>'; return; }
+      WR.weeks = w; renderWeekReport();
+    }).catch(function (e) { dlgFail("weekReportBody", "the report", e); });
+  });
+  document.getElementById("weekReportClose").addEventListener("click", function () { document.getElementById("weekReport").close(); });
+  document.getElementById("weekReport").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("weekReportCopy").addEventListener("click", function () { if (WR.weeks) copyText(this, weekReportText(), "Copy report"); });
+  document.getElementById("statsBtn").addEventListener("click", function () {
+    document.getElementById("statsDlg").showModal();
+    if (ST.weeks) { renderStats(); return; }
+    BQEBoard.api(BOARD_FN + "?stats=1").then(function (j) {
+      var w = (j.weeks || []).filter(function (x) { return x && x.n !== undefined; });
+      if (!w.length) { document.getElementById("statsBody").innerHTML = '<div class="wr-foot">No weekly stats are available yet.</div>'; return; }
+      ST.weeks = w; renderStats();
+    }).catch(function (e) { dlgFail("statsBody", "the stats", e); });
+  });
+  document.getElementById("statsClose").addEventListener("click", function () { document.getElementById("statsDlg").close(); });
+  document.getElementById("statsDlg").addEventListener("click", function (e) { if (e.target === this) this.close(); });
+  document.getElementById("statsCopy").addEventListener("click", function () { if (ST.weeks) copyText(this, statsText(), "Copy stats"); });
+
   // ---------- hosted board: sign-in, data, presence ----------
   var VIEWER = null, sig = "", loadedAt = 0, refreshTimer = null;
   var REFRESH_MS = 15 * 60 * 1000;
@@ -1026,7 +1207,7 @@
     var changed = next !== sig;
     completedSuggestions = j.done || {};
     if (changed) {
-      sig = next; ROWS = j.rows || []; TICKETS = j.tickets || {}; expandedRows = {};
+      sig = next; WR.weeks = null; ST.weeks = null; ROWS = j.rows || []; TICKETS = j.tickets || {}; expandedRows = {};
       el("genDate").textContent = fmtPT(j.generated_at);
       refreshFilterOptions(); renderAll();
     } else { renderSuggestions(); }
