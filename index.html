@@ -323,6 +323,15 @@
   .copy-btn:hover { border-color: var(--accent); color: var(--accent); } .copy-btn.copied { color: var(--good); border-color: var(--good); }
   .stats-dlg .wr-table { font-size: 12.5px; } .stats-dlg .wr-table th, .stats-dlg .wr-table td { padding: 6px 6px; }
   @media (max-width: 640px) { .hide-sm { display: none; } dialog.week-report { overflow-x: hidden; } .wr-table { font-size: 12px; } .wr-table th, .wr-table td { padding: 6px 4px; } }
+
+  .churn-note { color: var(--ink-3); font-size: 12px; margin-bottom: 6px; }
+  .churn-item { padding: 11px 0; border-top: 1px solid var(--border); }
+  .churn-top { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+  .churn-top .acct { font-weight: 600; }
+  .churn-meta { color: var(--ink-3); font-size: 12px; }
+  .churn-quote { margin: 5px 0 0; padding-left: 10px; border-left: 3px solid var(--critical); color: var(--ink-2); font-size: 12.5px; }
+  .chip.partial { background: var(--warning-soft); color: var(--warning); }
+  .chip.outside { background: var(--surface-alt); color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -374,6 +383,17 @@
       </div>
       <div class="snapshot-tag"><span class="snapshot-dot"></span>Data snapshot &mdash; <span id="genDate">&mdash;</span>, updated daily<span id="pushNote"></span></div>
     </div>
+
+    <details class="panel" id="churnDetails" open>
+      <summary>
+        <span class="section-title">Said they may leave</span>
+        <span class="section-note" id="churnCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:10px;">
+        <div class="churn-note">Tickets from the last 60 days where the customer wrote that they may cancel, not renew or switch. Found by the Zendesk trigger "Support: Churn Intent Tag" (plus tickets read by hand before it existed). Includes solved tickets, and accounts outside the main list.</div>
+        <div id="churnList"></div>
+      </div>
+    </details>
 
     <details class="panel" id="suggestionsDetails">
       <summary>
@@ -552,6 +572,8 @@
           <h4>At-risk criteria (segment-specific, since 2026-07-28)</h4>
           <ul>
             <li><b>Main ($8k&ndash;$20k), Main (Premium, &lt;$8k) &amp; CSM Owned (&gt;$20k):</b> 1 or more "clean flags" &mdash; an NPS detractor response, zero Subscription Usage score, a flat/negative Pendo usage trend, or zero Invoicing Usage score. These four are direct engagement/satisfaction measurements, not ticket-count ratios.</li>
+            <li><b>Churn intent override (all segments, since 2026-11-24):</b> a ticket in the last 60 days where the customer said they may cancel, not renew or switch makes the account at risk (Critical) whatever its Salesforce health or segment, and it is shown even when the Low ARR and CSM-owned toggles are off. A stated intent to leave is a different kind of signal from an aged ticket, which is why it can flag an account on its own.</li>
+            <li><b>Negative sentiment (supporting, since 2026-11-24):</b> 2 or more tickets Zendesk's AI rated negative in 30 days adds a reason and raises severity, and counts as one Zendesk signal for Low ARR. It never flags Main, Premium or CSM accounts by itself: it reads tone, so it also marks frustrated or urgent customers who are not leaving.</li>
             <li><b>Low ARR (&lt;$8k, non-Premium):</b> still the prior criteria (Salesforce Health Status = "At Risk" OR 2+ Zendesk signals) &mdash; see caveat below on why, and why this segment is excluded by default.</li>
           </ul>
           <p class="method-lede">Replaced the single portfolio-wide rule (Health Status = "At Risk" OR 2+ Zendesk signals) after finding it was ~98% driven by the Health Status label alone, which flags 55% of Low ARR accounts regardless of support activity &mdash; producing a 1,440-account list nobody could act on. Ticket Volume and Escalation Rate scores were also found to be unreliable at small accounts (a single ticket can swing them from 0 to 100%), so the new criteria deliberately avoids them. CSM Owned (&gt;$20k) uses the same bar as Main/Premium by default since it hasn't been tuned separately yet &mdash; worth revisiting once there's feedback on how well it fits a CSM-managed population.</p>
@@ -610,7 +632,7 @@
   function tier(row) {
     if (!row[10]) return null;
     var severity = row[7], reasons = row[12] || [];
-    var highSev = reasons.indexOf("Aged P1/P2") !== -1 || reasons.indexOf("Negative CSAT (open)") !== -1;
+    var highSev = reasons.indexOf("Aged P1/P2") !== -1 || reasons.indexOf("Negative CSAT (open)") !== -1 || reasons.indexOf("Churn intent (stated)") !== -1;
     if (severity >= 4 || highSev) return "critical";
     return "elevated";
   }
@@ -640,6 +662,7 @@
   // accounts themselves are excluded from the underlying data.
   function activeRows() {
     return ROWS.filter(function (r) {
+      if ((r[COLIDX.reasons] || []).indexOf("Churn intent (stated)") !== -1) return true;   // a stated intent to leave is never hidden by the toggles
       if (!state.includeCsm && r[COLIDX.csm_owned]) return false;
       if (!state.includeLowArr && r[2] === "L") return false;
       return true;
@@ -1195,6 +1218,28 @@
   document.getElementById("statsDlg").addEventListener("click", function (e) { if (e.target === this) this.close(); });
   document.getElementById("statsCopy").addEventListener("click", function () { if (ST.weeks) copyText(this, statsText(), "Copy stats"); });
 
+  // ---------- Said they may leave (churn intent tickets, last 60 days) ----------
+  var CHURN = [];
+  function fmtArr(n) { return n === null || n === undefined ? "n/a" : "$" + Math.round(n).toLocaleString(); }
+  function renderChurn() {
+    var list = CHURN.slice().sort(function (a, b) { return String(b.created).localeCompare(String(a.created)); });
+    document.getElementById("churnCount").textContent = list.length ? list.length + " ticket" + (list.length === 1 ? "" : "s") + " in 60 days" : "none in 60 days";
+    var el = document.getElementById("churnList");
+    if (!list.length) { el.innerHTML = '<div class="panel-empty">Nothing in the last 60 days. New ones are tagged automatically.</div>'; return; }
+    el.innerHTML = list.map(function (c) {
+      var nm = c.idFull ? '<a href="' + SF_ACCOUNT_URL + encodeURIComponent(c.idFull) + '/view" target="_blank" rel="noopener" title="Open in Salesforce">' + escapeHtml(c.name || "Unknown account") + '</a>' : escapeHtml(c.name || "Unknown account");
+      var chips = (c.kind === "partial" ? '<span class="chip partial">Partial cancel</span>' : '<span class="chip tier-critical">May leave</span>') + (c.inScope ? "" : '<span class="chip outside">Outside the main list</span>');
+      var bits = [];
+      if (c.inScope) { bits.push("ARR " + fmtArr(c.arr)); if (c.health) bits.push("health " + escapeHtml(c.health) + (c.score !== null && c.score !== undefined ? " " + Math.round(c.score) : "")); if (c.owner) bits.push("owner " + escapeHtml(c.owner)); }
+      bits.push(escapeHtml(c.created)); bits.push(escapeHtml(c.status));
+      if (c.assignee) bits.push("agent " + escapeHtml(c.assignee));
+      bits.push('<a href="' + ZD_TICKET_URL + encodeURIComponent(c.ticket) + '" target="_blank" rel="noopener">Zendesk #' + escapeHtml(c.ticket) + '</a>');
+      return '<div class="churn-item"><div class="churn-top"><span class="acct">' + nm + '</span>' + chips + '</div>' +
+        '<div class="churn-meta">' + bits.join(" &middot; ") + '</div>' +
+        (c.snippet ? '<div class="churn-quote">&ldquo;' + escapeHtml(c.snippet) + '&rdquo;</div>' : '') + '</div>';
+    }).join("");
+  }
+
   // ---------- hosted board: sign-in, data, presence ----------
   var VIEWER = null, sig = "", loadedAt = 0, refreshTimer = null;
   var REFRESH_MS = 15 * 60 * 1000;
@@ -1207,9 +1252,9 @@
     var changed = next !== sig;
     completedSuggestions = j.done || {};
     if (changed) {
-      sig = next; WR.weeks = null; ST.weeks = null; ROWS = j.rows || []; TICKETS = j.tickets || {}; expandedRows = {};
+      sig = next; WR.weeks = null; ST.weeks = null; CHURN = j.churn || []; ROWS = j.rows || []; TICKETS = j.tickets || {}; expandedRows = {};
       el("genDate").textContent = fmtPT(j.generated_at);
-      refreshFilterOptions(); renderAll();
+      refreshFilterOptions(); renderAll(); renderChurn();
     } else { renderSuggestions(); }
   }
   function load() {
