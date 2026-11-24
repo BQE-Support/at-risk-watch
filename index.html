@@ -1,0 +1,1067 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>At-Risk Watch</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23C23B3B'/%3E%3Cpath d='M16 7l10 18H6z' fill='none' stroke='white' stroke-width='2.4' stroke-linejoin='round'/%3E%3Cpath d='M16 14v5M16 21.5v.5' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
+<script src="bqe-board.js"></script>
+<style>
+  :root {
+    --bg: #F5F6F9;
+    --surface: #FFFFFF;
+    --surface-alt: #ECEFF5;
+    --border: #DDE1EA;
+    --ink: #16213E;
+    --ink-2: #47517A;
+    --ink-3: #8890AC;
+    --accent: #3454D1;
+    --accent-soft: #E7EBFB;
+    --good: #1E8A5F;
+    --good-soft: #E4F5EC;
+    --warning: #B8801E;
+    --warning-soft: #FBF1DE;
+    --critical: #C23B3B;
+    --critical-soft: #FBE7E4;
+    --seg-main: #3454D1;
+    --seg-premium: #1E8A8A;
+    --seg-low: #7A4FA0;
+    --seg-csm: #B15C1E;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+    --serif: Georgia, "Iowan Old Style", "Source Serif 4", "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0C1220;
+      --surface: #131A2B;
+      --surface-alt: #1B2438;
+      --border: #29334A;
+      --ink: #E9ECF6;
+      --ink-2: #B0B7D1;
+      --ink-3: #7C86A3;
+      --accent: #7C93F5;
+      --accent-soft: #1E2748;
+      --good: #4FC090;
+      --good-soft: #123024;
+      --warning: #E3AC49;
+      --warning-soft: #34240A;
+      --critical: #E2685A;
+      --critical-soft: #38201B;
+      --seg-main: #7C93F5;
+      --seg-premium: #4FBEBE;
+      --seg-low: #B98CDB;
+      --seg-csm: #E0A671;
+      --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0C1220; --surface: #131A2B; --surface-alt: #1B2438; --border: #29334A;
+    --ink: #E9ECF6; --ink-2: #B0B7D1; --ink-3: #7C86A3;
+    --accent: #7C93F5; --accent-soft: #1E2748;
+    --good: #4FC090; --good-soft: #123024;
+    --warning: #E3AC49; --warning-soft: #34240A;
+    --critical: #E2685A; --critical-soft: #38201B;
+    --seg-main: #7C93F5; --seg-premium: #4FBEBE; --seg-low: #B98CDB; --seg-csm: #E0A671;
+    --shadow: 0 1px 2px rgba(0,0,0,0.35), 0 6px 20px rgba(0,0,0,0.3);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F6F9; --surface: #FFFFFF; --surface-alt: #ECEFF5; --border: #DDE1EA;
+    --ink: #16213E; --ink-2: #47517A; --ink-3: #8890AC;
+    --accent: #3454D1; --accent-soft: #E7EBFB;
+    --good: #1E8A5F; --good-soft: #E4F5EC;
+    --warning: #B8801E; --warning-soft: #FBF1DE;
+    --critical: #C23B3B; --critical-soft: #FBE7E4;
+    --seg-main: #3454D1; --seg-premium: #1E8A8A; --seg-low: #7A4FA0; --seg-csm: #B15C1E;
+    --shadow: 0 1px 2px rgba(22,33,62,0.06), 0 6px 16px rgba(22,33,62,0.06);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .dash {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100%;
+    padding: 32px 20px 80px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  /* Masthead */
+  .masthead { display: flex; flex-direction: column; gap: 6px; }
+  .back-link { font-size: 12px; }
+  .back-link a { color: var(--ink-3); text-decoration: none; }
+  .back-link a:hover { color: var(--accent); text-decoration: underline; }
+  .eyebrow {
+    font: 600 11px/1 var(--sans); letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    font: 400 34px/1.15 var(--serif); margin: 2px 0 0; color: var(--ink);
+    text-wrap: balance;
+  }
+  .scope-line { font-size: 14px; color: var(--ink-2); margin-top: 2px; }
+  .scope-line b { color: var(--ink); font-weight: 600; }
+  .snapshot-tag {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+    font-size: 12px; color: var(--ink-3); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 10px 4px 8px; width: fit-content;
+  }
+  .snapshot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); flex: none; }
+
+  /* KPI strip */
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+  }
+  @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px;
+  }
+  .kpi.critical { border-color: color-mix(in srgb, var(--critical) 35%, var(--border)); }
+  .kpi-label { font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); font-weight: 600; }
+  .kpi-value { font: 400 30px/1.1 var(--serif); font-variant-numeric: tabular-nums; }
+  .kpi-value.crit { color: var(--critical); }
+  .kpi-sub { font-size: 12.5px; color: var(--ink-2); }
+
+  /* Section headers */
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .section-title { font: 400 19px/1.2 var(--serif); margin: 0; }
+  .section-note { font-size: 12.5px; color: var(--ink-3); }
+
+  /* Segment chart */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px 22px; box-shadow: var(--shadow);
+  }
+  .bar-row { display: grid; grid-template-columns: 190px 1fr 108px; align-items: center; gap: 14px; padding: 9px 0; }
+  .bar-row + .bar-row { border-top: 1px solid var(--border); }
+  .bar-label { font-size: 13.5px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .bar-track { position: relative; height: 10px; background: var(--surface-alt); border-radius: 6px; overflow: hidden; }
+  .bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 6px; }
+  .bar-figs { text-align: right; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar-figs b { color: var(--ink); font-size: 14px; }
+
+  /* Filters */
+  .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .search {
+    flex: 1 1 220px; min-width: 180px; border: 1px solid var(--border); background: var(--surface);
+    border-radius: 8px; padding: 8px 12px; font-size: 13.5px; color: var(--ink); font-family: var(--sans);
+  }
+  .search:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pill-toggle {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+    border-radius: 999px; padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    font-family: var(--sans);
+  }
+  .pill-toggle[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .pill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  select.pill-toggle { appearance: none; -webkit-appearance: none; }
+
+  /* Table */
+  .table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 880px; }
+  thead th {
+    position: sticky; top: 0; background: var(--surface-alt); text-align: left;
+    font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3);
+    font-weight: 700; padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+    white-space: nowrap; user-select: none;
+  }
+  thead th.num, td.num { text-align: right; }
+  thead th:hover { color: var(--ink); }
+  thead th .arrow { opacity: 0.4; font-size: 10px; margin-left: 3px; }
+  thead th.sorted .arrow { opacity: 1; color: var(--accent); }
+  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-alt); }
+  .acct-name { font-weight: 600; }
+  .acct-owner { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
+  .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  }
+  .chip.seg-M { background: color-mix(in srgb, var(--seg-main) 14%, transparent); color: var(--seg-main); }
+  .chip.seg-P { background: color-mix(in srgb, var(--seg-premium) 16%, transparent); color: var(--seg-premium); }
+  .chip.seg-L { background: color-mix(in srgb, var(--seg-low) 14%, transparent); color: var(--seg-low); }
+  .chip.seg-C { background: color-mix(in srgb, var(--seg-csm) 16%, transparent); color: var(--seg-csm); }
+  .chip.tier-critical { background: var(--critical-soft); color: var(--critical); }
+  .chip.tier-elevated { background: var(--warning-soft); color: var(--warning); }
+  .chip.tier-watch { background: var(--surface-alt); color: var(--ink-3); }
+  .health-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .health-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .dot-good { background: var(--good); } .dot-warn { background: var(--warning); } .dot-crit { background: var(--critical); }
+  .premium-star { color: var(--seg-premium); font-weight: 700; margin-left: 4px; }
+  .reasons { font-size: 11.5px; color: var(--ink-2); max-width: 230px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--ink-3); font-size: 13.5px; }
+  .panel-empty { font-size: 12.5px; color: var(--ink-3); padding: 8px 0; }
+
+  /* Suggestions */
+  .suggestion-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
+  .suggestion-item:first-child { border-top: none; padding-top: 2px; }
+  .suggestion-check {
+    flex: none; width: 20px; height: 20px; border: 1.5px solid var(--border); border-radius: 5px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; margin-top: 1px;
+    background: var(--surface); color: transparent; font-size: 13px; font-weight: 700;
+  }
+  .suggestion-check:hover { border-color: var(--accent); }
+  .suggestion-check.done { background: var(--good); border-color: var(--good); color: #fff; }
+  .suggestion-body { flex: 1; min-width: 0; }
+  .suggestion-text { font-size: 13.5px; color: var(--ink); line-height: 1.5; }
+  .suggestion-text b { font-weight: 700; }
+  .suggestion-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .suggestion-restore {
+    flex: none; font-size: 11.5px; font-weight: 600; color: var(--accent); background: none; border: none;
+    cursor: pointer; font-family: var(--sans); padding: 2px 0; margin-top: 2px;
+  }
+  .suggestion-restore:hover { text-decoration: underline; }
+
+  /* Ticket drill-down */
+  .acct-cell { cursor: default; }
+  .acct-cell.has-tickets { cursor: pointer; }
+  .acct-head { display: flex; align-items: center; gap: 6px; }
+  .expand-chevron {
+    display: inline-block; width: 9px; flex: none; color: var(--ink-3); font-size: 10px;
+    transition: transform 0.15s ease;
+  }
+  .expand-chevron.open { transform: rotate(90deg); }
+  tr.drilldown-row td { background: var(--surface-alt); padding: 0; border-bottom: 1px solid var(--border); }
+  .drilldown-wrap { padding: 4px 18px 16px 38px; display: flex; flex-direction: column; gap: 2px; }
+  .ticket-item { padding: 10px 0; border-top: 1px solid var(--border); }
+  .ticket-item:first-child { border-top: none; padding-top: 12px; }
+  .ticket-subject { font-size: 13px; font-weight: 600; }
+  .ticket-subject a { color: var(--ink); text-decoration: none; }
+  .ticket-subject a:hover { color: var(--accent); text-decoration: underline; }
+  .ticket-meta { font-size: 11.5px; color: var(--ink-2); margin-top: 3px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .ticket-views { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+  .link-chip {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px; text-decoration: none; white-space: nowrap;
+  }
+  .link-chip.zd { background: var(--accent-soft); color: var(--accent); }
+  .link-chip.jira { background: color-mix(in srgb, var(--seg-low) 16%, transparent); color: var(--seg-low); }
+  .link-chip:hover { filter: brightness(0.92); }
+  .no-tickets-note { padding: 12px 0; font-size: 12.5px; color: var(--ink-3); }
+
+  /* Pagination */
+  .pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px; font-size: 12.5px; color: var(--ink-2); }
+  .pager-btns { display: flex; gap: 6px; }
+  .pager button {
+    border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+    border-radius: 7px; padding: 6px 11px; font-size: 12.5px; cursor: pointer; font-family: var(--sans);
+  }
+  .pager button:disabled { opacity: 0.4; cursor: default; }
+  .pager button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Methodology */
+  details.panel summary {
+    cursor: pointer; font: 400 15px/1.2 var(--serif); list-style: none; display: flex;
+    align-items: center; justify-content: space-between;
+  }
+  details.panel summary::-webkit-details-marker { display: none; }
+  details.panel summary::after { content: "+"; font-family: var(--sans); font-size: 18px; color: var(--ink-3); }
+  details.panel[open] summary::after { content: "−"; }
+  .method-body { margin-top: 14px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; font-size: 13px; color: var(--ink-2); line-height: 1.55; }
+  @media (max-width: 760px) { .method-body { grid-template-columns: 1fr; } }
+  .method-body h4 { font: 700 12px var(--sans); letter-spacing: 0.03em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 6px; }
+  .method-body ul { margin: 0; padding-left: 18px; }
+  .method-body li { margin-bottom: 5px; }
+  .method-body code { background: var(--surface-alt); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .method-full { grid-column: 1 / -1; }
+  .method-lede { margin: 0; }
+  .method-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+  table.method-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 620px; }
+  .method-table thead th {
+    text-align: left; background: var(--surface-alt); color: var(--ink-3); font-weight: 700;
+    font-size: 10.5px; letter-spacing: 0.03em; text-transform: uppercase; padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .method-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink-2); }
+  .method-table tr:last-child td { border-bottom: none; }
+  .method-table td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+
+  footer.foot { text-align: center; font-size: 11.5px; color: var(--ink-3); padding-top: 4px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bar-fill { transition: width 0.5s ease; }
+  }
+
+  .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); max-width: 1240px; margin: 0 auto; padding: 14px 16px 0; }
+  .viewers { display: inline-flex; gap: 4px; }
+  .viewer-dot { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--surface-alt); border: 1px solid var(--border); font-size: 10.5px; font-weight: 600; color: var(--ink-2); }
+  .viewer-dot.me { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .top-btn { border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .top-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .signin { max-width: 440px; margin: 12vh auto 0; padding: 0 16px; text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; color: var(--ink); font-family: var(--sans); }
+  .signin h1 { font-family: var(--serif); font-size: 30px; margin: 0; font-weight: 600; }
+  .signin p { color: var(--ink-2); margin: 0; }
+  .signin .msg { color: var(--critical); font-size: 13px; }
+  .primary-btn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); }
+</style>
+</head>
+<body>
+<div class="topbar" id="topbar" hidden>
+  <span class="viewers" id="viewers"></span>
+  <span id="viewerName"></span>
+  <button type="button" class="top-btn" id="themeBtn">Theme</button>
+  <button type="button" class="top-btn" id="signOutBtn">Sign out</button>
+</div>
+<div class="signin" id="signin" hidden>
+  <div class="eyebrow">Customer Success &middot; At-Risk Customer Review</div>
+  <h1>At-Risk Watch</h1>
+  <p>Customer accounts at risk, from Salesforce health scores and Zendesk support signals.</p>
+  <button type="button" class="primary-btn" id="signInBtn">Sign in with RingCentral</button>
+  <div class="msg" id="signinMsg"></div>
+</div>
+<div id="board" hidden>
+<div class="dash">
+  <div class="wrap">
+
+    <div class="masthead">
+      <div class="eyebrow">Customer Success &middot; At-Risk Customer Review</div>
+      <h1>At-Risk Customer Accounts</h1>
+      <div class="scope-line">
+        <b id="scopeCount">&mdash;</b> customer accounts<span id="scopeQualifier"></span> &middot; ARR up to $20,000 (CSM-owned: any ARR) &middot;
+        combining Salesforce health scores with Zendesk support-risk signals
+      </div>
+      <div class="snapshot-tag"><span class="snapshot-dot"></span>Data snapshot &mdash; <span id="genDate">&mdash;</span>, updated daily<span id="pushNote"></span></div>
+    </div>
+
+    <details class="panel" id="suggestionsDetails">
+      <summary>
+        <span class="section-title">Where to Focus</span>
+        <span class="section-note" id="suggestionsCount" style="font-family:var(--sans); font-weight:400;"></span>
+      </summary>
+      <div style="margin-top:14px;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+          <button class="pill-toggle" id="suggestionsViewToggle" aria-pressed="false">Show completed</button>
+        </div>
+        <div id="suggestionsPanel"></div>
+      </div>
+    </details>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div>
+      <div class="section-head">
+        <h2 class="section-title">At-risk rate by segment</h2>
+        <span class="section-note">Share of each segment currently flagged at risk</span>
+      </div>
+      <div class="panel" id="segChart" style="margin-top:12px;"></div>
+    </div>
+
+    <div>
+      <div class="section-head">
+        <h2 class="section-title">Accounts</h2>
+        <span class="section-note" id="tableCount"></span>
+      </div>
+      <div class="filters" style="margin-top:12px; margin-bottom: 12px;">
+        <input class="search" id="searchBox" type="text" placeholder="Search account or owner&hellip;" />
+        <select class="pill-toggle" id="segFilter">
+          <option value="">All segments</option>
+          <option value="M">Main ($8k&ndash;$20k)</option>
+          <option value="P">Main (Premium, &lt;$8k)</option>
+          <option value="L">Low ARR (&lt;$8k, non-Premium)</option>
+          <option value="C">CSM Owned (&gt;$20k)</option>
+        </select>
+        <select class="pill-toggle" id="ownerFilter"><option value="">All owners</option></select>
+        <select class="pill-toggle" id="groupFilter"><option value="">All Zendesk groups</option></select>
+        <select class="pill-toggle" id="agentFilter"><option value="">All Zendesk agents</option></select>
+        <button class="pill-toggle" id="atRiskToggle" aria-pressed="true">At-risk only</button>
+        <button class="pill-toggle" id="premiumToggle" aria-pressed="false">Premium Support only</button>
+        <button class="pill-toggle" id="csmToggle" aria-pressed="false">Include CSM-owned</button>
+        <button class="pill-toggle" id="lowArrToggle" aria-pressed="false" title="Low ARR at-risk criteria is provisional - see Methodology">Include Low ARR</button>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th data-key="account_name">Account<span class="arrow">&#9662;</span></th>
+              <th data-key="arr_segment">Segment<span class="arrow">&#9662;</span></th>
+              <th data-key="arr" class="num">ARR<span class="arrow">&#9662;</span></th>
+              <th data-key="health_score" class="num">Health<span class="arrow">&#9662;</span></th>
+              <th data-key="risk_severity_score" class="num">Risk<span class="arrow">&#9662;</span></th>
+              <th data-key="risk_view_count" class="num">Signals<span class="arrow">&#9662;</span></th>
+              <th data-key="worst_csat">CSAT<span class="arrow">&#9662;</span></th>
+              <th data-key="days_oldest" class="num">Oldest Open<span class="arrow">&#9662;</span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span id="pagerInfo"></span>
+        <div class="pager-btns">
+          <button id="prevPage">&larr; Prev</button>
+          <button id="nextPage">Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+
+    <details class="panel">
+      <summary>Methodology &amp; scope notes</summary>
+      <div class="method-body">
+
+        <div class="method-full">
+          <h4>Data sources</h4>
+          <p class="method-lede">
+            Two systems feed this page. <b>Salesforce</b> supplies account attributes and its own
+            packaged health score. <b>Zendesk</b> supplies support-ticket risk signals from 7 saved
+            "Risk" views. The two are joined on the Salesforce Account Id, which Zendesk stores
+            against each Organization record via its native Salesforce integration &mdash; the same
+            link the account team's existing support tooling relies on.
+          </p>
+        </div>
+
+        <div class="method-full">
+          <h4>Metrics glossary</h4>
+          <div class="method-table-wrap">
+            <table class="method-table">
+              <thead><tr><th>Metric</th><th>What it means</th><th>How it's calculated</th><th>Source</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Health Score</td>
+                  <td>Overall account health, 0&ndash;100</td>
+                  <td>Support sub-score + Adoption sub-score</td>
+                  <td>Salesforce (<code>Pillar_1_Score__c</code> + <code>Pillar_2_Score__c</code>)</td>
+                </tr>
+                <tr>
+                  <td>Health Status</td>
+                  <td>Salesforce's own risk band shown per-account in its UI</td>
+                  <td>Healthy / Neutral / At Risk, set by Salesforce's own formula</td>
+                  <td>Salesforce (<code>Customer_Health_score__c</code>)</td>
+                </tr>
+                <tr>
+                  <td>ARR</td>
+                  <td>Annual recurring revenue &mdash; drives the segment an account falls into</td>
+                  <td>Direct field value</td>
+                  <td>Salesforce <code>ARR</code> field (the same value Zendesk mirrors)</td>
+                </tr>
+                <tr>
+                  <td>Premium Support</td>
+                  <td>Whether the account is enrolled in Premium Support</td>
+                  <td>Checkbox value</td>
+                  <td>Salesforce (<code>Premium_Support_Customer__c</code>)</td>
+                </tr>
+                <tr>
+                  <td>Signals</td>
+                  <td>How many of Zendesk's 7 Risk views this account's tickets currently appear in</td>
+                  <td>Count of distinct Risk views matched (0&ndash;7)</td>
+                  <td>Zendesk (Risk view ticket search, 7 saved views)</td>
+                </tr>
+                <tr>
+                  <td>Risk (severity)</td>
+                  <td>Weighted signal strength &mdash; distinguishes one aged ticket from a cluster of serious ones</td>
+                  <td>Sum of weights for triggered views: Aged P1/P2 = 3, GAL open 30+ days = 2, Negative CSAT (open) = 2, all others = 1</td>
+                  <td>Zendesk (derived)</td>
+                </tr>
+                <tr>
+                  <td>CSAT</td>
+                  <td>Worst customer satisfaction rating on a matched ticket</td>
+                  <td>"bad" or "bad, with comment"</td>
+                  <td>Zendesk ticket satisfaction ratings</td>
+                </tr>
+                <tr>
+                  <td>Oldest Open</td>
+                  <td>How long the oldest matching risk ticket has sat open</td>
+                  <td>Days since that ticket's creation date</td>
+                  <td>Zendesk</td>
+                </tr>
+                <tr>
+                  <td>Segment</td>
+                  <td>Which of the three ARR/Premium groupings the account falls into</td>
+                  <td>See Segments below</td>
+                  <td>Derived from Salesforce ARR + Premium Support</td>
+                </tr>
+                <tr>
+                  <td>Clean Flags</td>
+                  <td>Count of 4 engagement/satisfaction signals reading as genuinely bad (not ticket-count noise)</td>
+                  <td>NPS detractor, zero Subscription Usage, flat/negative Pendo trend, zero Invoicing Usage &mdash; each independently checked</td>
+                  <td>Salesforce (<code>Admin_NPS_Score__c</code>, <code>Subscription_Usage_Score__c</code>, <code>Pendo_Usage_Trend_Score__c</code>, <code>Invoicing_Usage_Score__c</code>)</td>
+                </tr>
+                <tr>
+                  <td>At Risk</td>
+                  <td>The single flag this page filters and sorts on</td>
+                  <td>See At-risk criteria below &mdash; differs by segment</td>
+                  <td>Main/Premium/CSM Owned: Clean Flags. Low ARR: Salesforce Health Status + Zendesk Signals</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <h4>Segments</h4>
+          <ul>
+            <li>Scope: Salesforce Accounts, Type = Customer, synced to Zendesk, and either ARR &le; $20,000 or CSM Owned = true (any ARR)</li>
+            <li><b>Main ($8k&ndash;$20k)</b>: ARR between $8,000 and $20,000</li>
+            <li><b>Main (Premium, &lt;$8k)</b>: ARR under $8,000 but a Premium Support customer &mdash; kept with the main group rather than the low-ARR segment</li>
+            <li><b>Low ARR (&lt;$8k, non-Premium)</b>: ARR under $8,000 and not Premium Support</li>
+            <li><b>CSM Owned (&gt;$20k)</b>: ARR over $20,000 &mdash; at BQE, crossing $20k ARR is what gets an account a dedicated CSM, so this segment is effectively the CSM-managed population. Added 2026-08-18; previously excluded entirely by a hard ARR&le;$20k ceiling on the underlying data pull, so no toggle could ever surface these accounts (e.g. MC Consultants, Inc. at $50,107 ARR).</li>
+          </ul>
+        </div>
+        <div>
+          <h4>At-risk criteria (segment-specific, since 2026-07-28)</h4>
+          <ul>
+            <li><b>Main ($8k&ndash;$20k), Main (Premium, &lt;$8k) &amp; CSM Owned (&gt;$20k):</b> 1 or more "clean flags" &mdash; an NPS detractor response, zero Subscription Usage score, a flat/negative Pendo usage trend, or zero Invoicing Usage score. These four are direct engagement/satisfaction measurements, not ticket-count ratios.</li>
+            <li><b>Low ARR (&lt;$8k, non-Premium):</b> still the prior criteria (Salesforce Health Status = "At Risk" OR 2+ Zendesk signals) &mdash; see caveat below on why, and why this segment is excluded by default.</li>
+          </ul>
+          <p class="method-lede">Replaced the single portfolio-wide rule (Health Status = "At Risk" OR 2+ Zendesk signals) after finding it was ~98% driven by the Health Status label alone, which flags 55% of Low ARR accounts regardless of support activity &mdash; producing a 1,440-account list nobody could act on. Ticket Volume and Escalation Rate scores were also found to be unreliable at small accounts (a single ticket can swing them from 0 to 100%), so the new criteria deliberately avoids them. CSM Owned (&gt;$20k) uses the same bar as Main/Premium by default since it hasn't been tuned separately yet &mdash; worth revisiting once there's feedback on how well it fits a CSM-managed population.</p>
+        </div>
+        <div>
+          <h4>Known caveats</h4>
+          <ul>
+            <li><b>Low ARR and CSM Owned are excluded from every view by default</b> (KPIs, chart, table) via the "Include Low ARR" / "Include CSM-owned" toggles. Tightening Low ARR's criteria the same way as Main/Premium hit a cliff, not a gradient (2+ clean flags = 839 accounts, 3+ = 17, nothing usable between) &mdash; tiny accounts score low on every usage dimension as a baseline characteristic, which an absolute threshold can't distinguish from real decline. Needs trend data, not a different cutoff. Toggle either on to see the segment anyway.</li>
+            <li>One account carries an unreadable health sub-score in Salesforce and is shown with a blank Health value</li>
+          </ul>
+        </div>
+        <div>
+          <h4>Refresh</h4>
+          <ul>
+            <li>Rebuilt periodically from Salesforce account data and Zendesk's support-risk views</li>
+            <li>This page is a static snapshot &mdash; re-share a new link after each refresh rather than expecting it to update itself</li>
+          </ul>
+        </div>
+      </div>
+    </details>
+
+    <footer class="foot">BQE Software &middot; Internal &middot; Version 1.0 (hosted)</footer>
+  </div>
+</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ROWS columns: [name, arr, seg, premium(0/1), health, healthStatus, riskCount, severity, daysOldest, worstCsat, atRisk(0/1), owner, reasons, accountId15, accountIdFull]
+  var ROWS = [];
+  // Per-account Zendesk risk-ticket drill-down, keyed by the 15-char Account Id
+  // (row[13]). A ticket's "gal" field, when present, is a Jira issue key in
+  // BQE's GAL project - not a separate integration, just a direct link.
+  var TICKETS = {};
+  var GENERATED_AT = "";
+  var SF_ACCOUNT_URL = "https://bqe.lightning.force.com/lightning/r/Account/";
+  var ZD_TICKET_URL = "https://bqe.zendesk.com/agent/tickets/";
+  var JIRA_ISSUE_URL = "https://bqetrack.atlassian.net/browse/";
+  var expandedRows = {};
+
+  
+  var SEG_LABEL = { M: "Main ($8k–$20k)", P: "Main (Premium, <$8k)", L: "Low ARR (<$8k)", C: "CSM Owned (>$20k)" };
+  var SEG_VAR = { M: "--seg-main", P: "--seg-premium", L: "--seg-low", C: "--seg-csm" };
+  var HEALTH_DOT = { "Healthy": "dot-good", "Neutral": "dot-warn", "At Risk": "dot-crit" };
+
+  function fmtMoney(n) {
+    if (n === null || n === undefined) return "—";
+    return "$" + Math.round(n).toLocaleString();
+  }
+  function fmtNum(n, d) {
+    if (n === null || n === undefined || isNaN(n)) return "—";
+    return d ? n.toFixed(d) : Math.round(n).toLocaleString();
+  }
+  function tier(row) {
+    if (!row[10]) return null;
+    var severity = row[7], reasons = row[12] || [];
+    var highSev = reasons.indexOf("Aged P1/P2") !== -1 || reasons.indexOf("Negative CSAT (open)") !== -1;
+    if (severity >= 4 || highSev) return "critical";
+    return "elevated";
+  }
+
+  // Numeric rank for tier() so sorting/prioritizing groups by the same
+  // critical/elevated split the badge shows, instead of the raw severity
+  // score alone (which doesn't capture the highSev override above).
+  var TIER_RANK = { critical: 2, elevated: 1 };
+  function tierRank(row) {
+    return TIER_RANK[tier(row)] || 0;
+  }
+
+  // ---- Filter state ----
+  var state = { search: "", segment: "", owner: "", group: "", agent: "", atRiskOnly: true, premiumOnly: false,
+    includeCsm: false, includeLowArr: false, sortKey: "priority", sortDir: 1, page: 0 };
+  var PAGE_SIZE = 50;
+
+  var COLIDX = { account_name: 0, arr: 1, arr_segment: 2, premium: 3, health_score: 4, health_status: 5,
+    risk_view_count: 6, risk_severity_score: 7, days_oldest: 8, worst_csat: 9, at_risk: 10, owner: 11, reasons: 12,
+    account_id_15: 13, account_id_full: 14, csm_owned: 15, zd_groups: 16, zd_agents: 17 };
+
+  // The CSM-owned and Low ARR toggles both change the underlying population,
+  // not just what's visible in the table - so every other view (KPIs, segment
+  // chart, table, and the owner/group/agent filter options) derives from this,
+  // not from ROWS directly. Low ARR is excluded by default because its at-risk
+  // criteria is still the old, noisier one (see Methodology) - not because the
+  // accounts themselves are excluded from the underlying data.
+  function activeRows() {
+    return ROWS.filter(function (r) {
+      if (!state.includeCsm && r[COLIDX.csm_owned]) return false;
+      if (!state.includeLowArr && r[2] === "L") return false;
+      return true;
+    });
+  }
+
+  // ---- Suggestions ("Where to Focus") persistence - same scheme as the CSAT
+  // dashboard: keyed by account id (stable across pulls, unlike the exact
+  // severity numbers), full text/metadata stored at completion time so the
+  // Completed view stays a real log even after an account resolves and stops
+  // generating a candidate on a later pull.
+  var completedSuggestions = {};
+  function saveSuggestion(action, key, text) {
+    return BQEBoard.api("at-risk-watch", { method: "POST", body: { action: action, key: key, text: text } })
+      .then(function (j) { completedSuggestions = j.done || {}; renderSuggestions(); })
+      .catch(function (e) { alert("Could not save: " + e.message); load(); });
+  }
+  var suggestionsView = "outstanding";
+
+  function fmtSuggestionDate(ms) {
+    if (!ms) return "";
+    return new Date(ms).toISOString().split("T")[0];
+  }
+
+  // One candidate per at-risk account (a single account is already a discrete
+  // entity, unlike the CSAT dashboard's per-agent aggregates - no volume
+  // threshold or category-balancing needed here). Severity + Premium Support +
+  // how long the oldest risk ticket has sat open all feed one combined score.
+  function buildSuggestionCandidates() {
+    var active = activeRows();
+    var candidates = [];
+    active.forEach(function (r) {
+      if (!r[COLIDX.at_risk]) return;
+      var severity = r[COLIDX.risk_severity_score] || 0;
+      var premium = !!r[COLIDX.premium];
+      var daysOldest = r[COLIDX.days_oldest];
+      var reasons = (r[COLIDX.reasons] && r[COLIDX.reasons].length) ? r[COLIDX.reasons].join(", ") : "no specific Zendesk signal";
+      var score = severity * 10 + (premium ? 40 : 0) + (daysOldest ? Math.min(daysOldest, 365) * 0.3 : 0);
+      var health = r[COLIDX.health_score];
+      var bits = [reasons];
+      if (health !== null && health !== undefined) bits.push("health score " + Math.round(health));
+      if (premium) bits.push("Premium Support");
+      candidates.push({
+        key: "account:" + r[COLIDX.account_id_15],
+        score: score,
+        text: "Reach out to <b>" + escapeHtml(r[COLIDX.account_name]) + "</b> &mdash; " + bits.join(", ") + "."
+      });
+    });
+    candidates.sort(function (a, b) { return b.score - a.score; });
+    return candidates;
+  }
+
+  function renderSuggestions() {
+    var el = document.getElementById("suggestionsPanel");
+    if (suggestionsView === "completed") {
+      var completedList = Object.keys(completedSuggestions).map(function (k) { return completedSuggestions[k]; })
+        .sort(function (a, b) { return b.completedAt - a.completedAt; });
+      document.getElementById("suggestionsCount").textContent = completedList.length.toLocaleString() + " completed";
+      if (!completedList.length) { el.innerHTML = '<div class="panel-empty">Nothing marked completed yet.</div>'; return; }
+      el.innerHTML = completedList.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check done">&#10003;</span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div>' +
+            '<div class="suggestion-meta">Completed ' + fmtSuggestionDate(s.completedAt) + (s.by ? ' by ' + escapeHtml(s.by) : '') + '</div></div>' +
+          '<button class="suggestion-restore" data-restore-key="' + escapeHtml(s.key) + '">Restore</button>' +
+          '</div>';
+      }).join("");
+    } else {
+      var all = buildSuggestionCandidates().filter(function (c) { return !completedSuggestions[c.key]; }).slice(0, 10);
+      document.getElementById("suggestionsCount").textContent = all.length.toLocaleString() + " outstanding";
+      if (!all.length) { el.innerHTML = '<div class="panel-empty">Nothing outstanding right now.</div>'; return; }
+      el.innerHTML = all.map(function (s) {
+        return '<div class="suggestion-item">' +
+          '<span class="suggestion-check" data-complete-key="' + escapeHtml(s.key) + '" data-complete-text="' + escapeHtml(s.text) + '"></span>' +
+          '<div class="suggestion-body"><div class="suggestion-text">' + s.text + '</div></div>' +
+          '</div>';
+      }).join("");
+    }
+  }
+
+  function priorityScore(row) {
+    // mirrors the pipeline's own sort: at-risk first, premium next, then risk
+    // tier (critical/elevated, same grouping as the Risk badge), then raw
+    // severity score as a tiebreaker within the same tier
+    return (row[10] ? 1000000 : 0) + (row[3] ? 100000 : 0) + tierRank(row) * 10000 + (row[7] || 0) * 100;
+  }
+
+  function applyFilters(base) {
+    var q = state.search.trim().toLowerCase();
+    var rows = base.filter(function (r) {
+      if (state.atRiskOnly && !r[10]) return false;
+      if (state.premiumOnly && !r[3]) return false;
+      if (state.segment && r[2] !== state.segment) return false;
+      if (state.owner && (r[11] || "") !== state.owner) return false;
+      if (state.group && (r[COLIDX.zd_groups] || []).indexOf(state.group) === -1) return false;
+      if (state.agent && (r[COLIDX.zd_agents] || []).indexOf(state.agent) === -1) return false;
+      if (q && r[0].toLowerCase().indexOf(q) === -1 && (r[11] || "").toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+    if (state.sortKey === "priority") {
+      rows.sort(function (a, b) { return priorityScore(b) - priorityScore(a); });
+    } else if (state.sortKey === "risk_severity_score") {
+      // The Risk column shows the tier() badge (critical/elevated), which
+      // isn't a pure function of the raw severity score alone (see tier()'s
+      // highSev override) - sort by tier first so the badges group together,
+      // then by raw score as a tiebreaker within the same tier.
+      rows.sort(function (a, b) {
+        var ta = tierRank(a), tb = tierRank(b);
+        if (ta !== tb) return state.sortDir * (ta - tb);
+        return state.sortDir * ((a[7] || 0) - (b[7] || 0));
+      });
+    } else {
+      var idx = COLIDX[state.sortKey];
+      rows.sort(function (a, b) {
+        var av = a[idx], bv = b[idx];
+        if (av === null || av === undefined) av = state.sortDir === 1 ? -Infinity : Infinity;
+        if (bv === null || bv === undefined) bv = state.sortDir === 1 ? -Infinity : Infinity;
+        if (typeof av === "string") return state.sortDir * av.localeCompare(bv);
+        return state.sortDir * (av - bv);
+      });
+    }
+    return rows;
+  }
+
+  function renderKPIs(active) {
+    var total = active.length;
+    var atRisk = active.filter(function (r) { return r[10]; });
+    var premAtRisk = atRisk.filter(function (r) { return r[3]; });
+    var critical = atRisk.filter(function (r) { return tier(r) === "critical"; });
+    var avgHealthAtRisk = atRisk.length ? atRisk.reduce(function (s, r) { return s + (r[4] || 0); }, 0) / atRisk.filter(function(r){return r[4]!==null;}).length : 0;
+    var avgHealthAll = total ? active.reduce(function (s, r) { return s + (r[4] || 0); }, 0) / active.filter(function(r){return r[4]!==null;}).length : 0;
+
+    // Say nothing about CSM-owned/Low ARR while they're excluded (the default)
+    // - only mention them once a toggle actually brings them into scope.
+    var scopeSub = "ARR ≤ $20k";
+    var included = [];
+    if (state.includeCsm) included.push("CSM-owned (any ARR)");
+    if (state.includeLowArr) included.push("Low ARR");
+    if (included.length) scopeSub += ", incl. " + included.join(" & ");
+    var tiles = [
+      { label: "Accounts in scope", value: total.toLocaleString(), sub: scopeSub },
+      { label: "At risk", value: atRisk.length.toLocaleString(), sub: (total ? Math.round(atRisk.length / total * 100) : 0) + "% of scope", crit: true },
+      { label: "Premium Support, at risk", value: premAtRisk.length.toLocaleString(), sub: "flagged on 1+ signal" },
+      { label: "Critical severity", value: critical.length.toLocaleString(), sub: "high-severity signal or 4+ score", crit: true },
+      { label: "Avg. health score", value: fmtNum(avgHealthAtRisk, 0), sub: "at-risk · vs " + fmtNum(avgHealthAll, 0) + " overall" }
+    ];
+    var html = tiles.map(function (t) {
+      return '<div class="kpi' + (t.crit ? ' critical' : '') + '">' +
+        '<div class="kpi-label">' + t.label + '</div>' +
+        '<div class="kpi-value' + (t.crit ? ' crit' : '') + '">' + t.value + '</div>' +
+        '<div class="kpi-sub">' + t.sub + '</div></div>';
+    }).join("");
+    document.getElementById("kpiGrid").innerHTML = html;
+  }
+
+  function renderSegChart(active) {
+    // Don't just let the Low ARR / CSM Owned segments zero themselves out via
+    // `active` being pre-filtered - explicitly drop each from the segment list
+    // while its toggle is off, so no "0% · 0/0" row lingers in the chart
+    // implying it exists.
+    var segs = ["M", "P"];
+    if (state.includeLowArr) segs.push("L");
+    if (state.includeCsm) segs.push("C");
+    var rowsHtml = segs.map(function (s) {
+      var inSeg = active.filter(function (r) { return r[2] === s; });
+      var atR = inSeg.filter(function (r) { return r[10]; });
+      var rate = inSeg.length ? atR.length / inSeg.length : 0;
+      return { s: s, total: inSeg.length, atRisk: atR.length, rate: rate };
+    }).sort(function (a, b) { return b.rate - a.rate; });
+
+    var html = rowsHtml.map(function (r) {
+      var pct = Math.round(r.rate * 100);
+      return '<div class="bar-row">' +
+        '<div class="bar-label"><span class="swatch" style="background:var(' + SEG_VAR[r.s] + ')"></span>' + SEG_LABEL[r.s] + '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; background:var(' + SEG_VAR[r.s] + ')"></div></div>' +
+        '<div class="bar-figs"><b>' + pct + '%</b> &middot; ' + r.atRisk.toLocaleString() + ' / ' + r.total.toLocaleString() + '</div>' +
+        '</div>';
+    }).join("");
+    document.getElementById("segChart").innerHTML = html;
+  }
+
+  function uniqueSorted(values) {
+    var seen = {}, out = [];
+    values.forEach(function (v) {
+      if (v && !seen[v]) { seen[v] = true; out.push(v); }
+    });
+    out.sort(function (a, b) { return a.localeCompare(b); });
+    return out;
+  }
+
+  function populateSelect(id, values, placeholder) {
+    var sel = document.getElementById(id);
+    var current = sel.value;
+    sel.innerHTML = '<option value="">' + placeholder + '</option>' +
+      values.map(function (v) { return '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>'; }).join("");
+    if (current && values.indexOf(current) !== -1) sel.value = current;
+  }
+
+  function refreshFilterOptions() {
+    populateSelect("ownerFilter", uniqueSorted(ROWS.map(function (r) { return r[11]; })), "All owners");
+    populateSelect("groupFilter", uniqueSorted(ROWS.reduce(function (acc, r) { return acc.concat(r[COLIDX.zd_groups] || []); }, [])), "All Zendesk groups");
+    populateSelect("agentFilter", uniqueSorted(ROWS.reduce(function (acc, r) { return acc.concat(r[COLIDX.zd_agents] || []); }, [])), "All Zendesk agents");
+  }
+
+  function renderAll() {
+    var active = activeRows();
+    document.getElementById("scopeCount").textContent = active.length.toLocaleString();
+    // Silent by default - only say anything once a toggle actually includes
+    // CSM-owned/Low ARR accounts, never "excluding X" while they're hidden.
+    var included = [];
+    if (state.includeCsm) included.push("CSM-owned (any ARR)");
+    if (state.includeLowArr) included.push("Low ARR");
+    document.getElementById("scopeQualifier").textContent = included.length ? (", including " + included.join(" & ")) : "";
+    renderSuggestions();
+    renderSegChart(active);
+    renderTable(active);
+  }
+
+  function renderTable(active) {
+    var filtered = applyFilters(active);
+    document.getElementById("tableCount").textContent = filtered.length.toLocaleString() + " account" + (filtered.length === 1 ? "" : "s");
+
+    var totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (state.page >= totalPages) state.page = totalPages - 1;
+    var start = state.page * PAGE_SIZE;
+    var pageRows = filtered.slice(start, start + PAGE_SIZE);
+
+    var tbody = document.getElementById("tbody");
+    if (!pageRows.length) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No accounts match the current filters.</div></td></tr>';
+    } else {
+      tbody.innerHTML = pageRows.map(function (r) {
+        var t = tier(r);
+        var chipTier = t === "critical" ? '<span class="chip tier-critical">Critical</span>'
+          : t === "elevated" ? '<span class="chip tier-elevated">Elevated</span>'
+          : '<span class="chip tier-watch">Watch</span>';
+        var healthDot = '<span class="health-dot ' + (HEALTH_DOT[r[5]] || "dot-warn") + '"></span>';
+        var reasons = (r[12] && r[12].length) ? r[12].join(", ") : "—";
+
+        var accountId15 = r[COLIDX.account_id_15] || "";
+        var accountIdFull = r[COLIDX.account_id_full] || "";
+        var tickets = TICKETS[accountId15] || [];
+        var hasTickets = tickets.length > 0;
+        var expanded = hasTickets && !!expandedRows[accountId15];
+        var chevron = hasTickets
+          ? '<span class="expand-chevron' + (expanded ? ' open' : '') + '">&#9656;</span>'
+          : '<span class="expand-chevron"></span>';
+        var acctHeadOpen = hasTickets
+          ? '<div class="acct-head has-tickets" data-toggle-account="' + escapeHtml(accountId15) + '">'
+          : '<div class="acct-head">';
+        var sfLink = accountIdFull
+          ? '<a href="' + SF_ACCOUNT_URL + encodeURIComponent(accountIdFull) + '/view" target="_blank" rel="noopener" title="Open in Salesforce">' + escapeHtml(r[0]) + '</a>'
+          : escapeHtml(r[0]);
+
+        var mainRow = '<tr>' +
+          '<td>' +
+            acctHeadOpen + chevron + '<div class="acct-name">' + sfLink + (r[3] ? '<span class="premium-star" title="Premium Support customer">&#9733;</span>' : '') + '</div></div>' +
+            '<div class="acct-owner">' + escapeHtml(r[11] || "Unassigned") + '</div>' +
+            '<span class="reasons" title="' + escapeHtml(reasons) + '">' + escapeHtml(reasons) + '</span>' +
+          '</td>' +
+          '<td><span class="chip seg-' + r[2] + '">' + SEG_LABEL[r[2]] + '</span></td>' +
+          '<td class="num">' + fmtMoney(r[1]) + '</td>' +
+          '<td class="num"><span class="health-pill">' + healthDot + (r[4] === null ? "—" : Math.round(r[4])) + '</span></td>' +
+          '<td class="num">' + chipTier + '</td>' +
+          '<td class="num">' + r[6] + '</td>' +
+          '<td class="num">' + (r[9] ? r[9] : "—") + '</td>' +
+          '<td class="num">' + (r[8] !== null ? Math.round(r[8]) + "d" : "—") + '</td>' +
+          '</tr>';
+
+        var drillRow = expanded
+          ? '<tr class="drilldown-row"><td colspan="8"><div class="drilldown-wrap">' + renderDrilldown(tickets) + '</div></td></tr>'
+          : '';
+
+        return mainRow + drillRow;
+      }).join("");
+    }
+
+    document.getElementById("pagerInfo").textContent = filtered.length
+      ? ("Showing " + (start + 1) + "–" + Math.min(start + PAGE_SIZE, filtered.length) + " of " + filtered.length.toLocaleString())
+      : "";
+    document.getElementById("prevPage").disabled = state.page <= 0;
+    document.getElementById("nextPage").disabled = state.page >= totalPages - 1;
+
+    renderKPIs(active);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function capitalize(s) {
+    s = String(s || "");
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function fmtTicketDate(s) {
+    if (!s) return "";
+    return String(s).split(" ")[0];
+  }
+  function renderTicketItem(t) {
+    var meta = [];
+    if (t.priority) meta.push(escapeHtml(capitalize(t.priority)));
+    if (t.status) meta.push(escapeHtml(capitalize(t.status)));
+    var created = fmtTicketDate(t.created);
+    if (created) meta.push(escapeHtml(created));
+    if (t.csat && t.csat !== "unoffered") {
+      meta.push('<span style="color:var(--critical)">CSAT: ' + escapeHtml(String(t.csat).replace(/_/g, " ")) + '</span>');
+    }
+    var links = '<a class="link-chip zd" href="' + ZD_TICKET_URL + encodeURIComponent(t.id) + '" target="_blank" rel="noopener">Zendesk #' + escapeHtml(t.id) + '</a>';
+    if (t.gal) {
+      // The GAL field can hold more than one comma-separated GAL number on a
+      // single ticket - split so each becomes its own valid Jira link rather
+      // than one broken link built from the combined string.
+      String(t.gal).split(",").map(function (g) { return g.trim(); }).filter(Boolean).forEach(function (galNum) {
+        links += '<a class="link-chip jira" href="' + JIRA_ISSUE_URL + encodeURIComponent(galNum) + '" target="_blank" rel="noopener">' + escapeHtml(galNum) + '</a>';
+      });
+    }
+    var views = (t.views && t.views.length) ? t.views.join(", ") : "";
+    return '<div class="ticket-item">' +
+      '<div class="ticket-subject"><a href="' + ZD_TICKET_URL + encodeURIComponent(t.id) + '" target="_blank" rel="noopener">' + escapeHtml(t.subject || "(no subject)") + '</a></div>' +
+      '<div class="ticket-meta">' + meta.join(" &middot; ") + links + '</div>' +
+      (views ? '<div class="ticket-views">Matched: ' + escapeHtml(views) + '</div>' : '') +
+      '</div>';
+  }
+  function renderDrilldown(tickets) {
+    if (!tickets || !tickets.length) return '<div class="no-tickets-note">No matching risk tickets.</div>';
+    return tickets.map(renderTicketItem).join("");
+  }
+
+  // ---- Wire up controls ----
+  document.getElementById("searchBox").addEventListener("input", function (e) {
+    state.search = e.target.value; state.page = 0; renderAll();
+  });
+  document.getElementById("segFilter").addEventListener("change", function (e) {
+    state.segment = e.target.value;
+    // Low ARR rows are stripped out of activeRows() entirely unless
+    // includeLowArr is on (see activeRows() above) - picking "Low ARR" here
+    // without that toggle always returned 0 accounts, which read as broken
+    // rather than as an interaction between two separate controls. Selecting
+    // the segment is a clear enough signal to want to see it.
+    if (state.segment === "L" && !state.includeLowArr) {
+      state.includeLowArr = true;
+      document.getElementById("lowArrToggle").setAttribute("aria-pressed", "true");
+    }
+    state.page = 0; renderAll();
+  });
+  document.getElementById("ownerFilter").addEventListener("change", function (e) {
+    state.owner = e.target.value; state.page = 0; renderAll();
+  });
+  document.getElementById("groupFilter").addEventListener("change", function (e) {
+    state.group = e.target.value; state.page = 0; renderAll();
+  });
+  document.getElementById("agentFilter").addEventListener("change", function (e) {
+    state.agent = e.target.value; state.page = 0; renderAll();
+  });
+  document.getElementById("atRiskToggle").addEventListener("click", function (e) {
+    state.atRiskOnly = !state.atRiskOnly; e.target.setAttribute("aria-pressed", state.atRiskOnly); state.page = 0; renderAll();
+  });
+  document.getElementById("premiumToggle").addEventListener("click", function (e) {
+    state.premiumOnly = !state.premiumOnly; e.target.setAttribute("aria-pressed", state.premiumOnly); state.page = 0; renderAll();
+  });
+  document.getElementById("csmToggle").addEventListener("click", function (e) {
+    state.includeCsm = !state.includeCsm; e.target.setAttribute("aria-pressed", state.includeCsm); state.page = 0; renderAll();
+  });
+  document.getElementById("lowArrToggle").addEventListener("click", function (e) {
+    state.includeLowArr = !state.includeLowArr; e.target.setAttribute("aria-pressed", state.includeLowArr); state.page = 0; renderAll();
+  });
+  document.getElementById("prevPage").addEventListener("click", function () { if (state.page > 0) { state.page--; renderAll(); } });
+  document.getElementById("nextPage").addEventListener("click", function () { state.page++; renderAll(); });
+
+  document.getElementById("tbody").addEventListener("click", function (e) {
+    if (e.target.closest("a")) return; // let ticket/Salesforce links navigate normally
+    var head = e.target.closest("[data-toggle-account]");
+    if (!head) return;
+    var key = head.getAttribute("data-toggle-account");
+    if (expandedRows[key]) { delete expandedRows[key]; } else { expandedRows[key] = true; }
+    renderAll();
+  });
+
+  document.querySelectorAll("thead th[data-key]").forEach(function (th) {
+    th.addEventListener("click", function () {
+      var key = th.getAttribute("data-key");
+      if (state.sortKey === key) { state.sortDir *= -1; } else { state.sortKey = key; state.sortDir = key === "account_name" || key === "arr_segment" ? 1 : -1; }
+      document.querySelectorAll("thead th").forEach(function (h) { h.classList.remove("sorted"); });
+      th.classList.add("sorted");
+      state.page = 0;
+      renderAll();
+    });
+  });
+
+  document.getElementById("suggestionsViewToggle").addEventListener("click", function (e) {
+    suggestionsView = suggestionsView === "outstanding" ? "completed" : "outstanding";
+    e.target.setAttribute("aria-pressed", suggestionsView === "completed");
+    e.target.textContent = suggestionsView === "completed" ? "Show outstanding" : "Show completed";
+    renderSuggestions();
+  });
+
+  document.getElementById("suggestionsPanel").addEventListener("click", function (e) {
+    var check = e.target.closest("[data-complete-key]");
+    if (check) {
+      var key = check.getAttribute("data-complete-key");
+      var text = check.getAttribute("data-complete-text");
+      completedSuggestions[key] = { key: key, text: text, by: VIEWER ? VIEWER.name : "", completedAt: Date.now() };
+      renderSuggestions();
+      saveSuggestion("done", key, text);
+      return;
+    }
+    var restore = e.target.closest("[data-restore-key]");
+    if (restore) {
+      var rkey = restore.getAttribute("data-restore-key");
+      delete completedSuggestions[rkey];
+      renderSuggestions();
+      saveSuggestion("undo", rkey, "");
+    }
+  });
+
+  // ---------- hosted board: sign-in, data, presence ----------
+  var VIEWER = null, sig = "", loadedAt = 0, refreshTimer = null;
+  var REFRESH_MS = 15 * 60 * 1000;
+  function el(id) { return document.getElementById(id); }
+  function fmtPT(iso) {
+    return new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + " PT";
+  }
+  function setData(j) {
+    var next = j.generated_at + "|" + j.pushed_at;
+    var changed = next !== sig;
+    completedSuggestions = j.done || {};
+    if (changed) {
+      sig = next; ROWS = j.rows || []; TICKETS = j.tickets || {}; expandedRows = {};
+      el("genDate").textContent = fmtPT(j.generated_at);
+      refreshFilterOptions(); renderAll();
+    } else { renderSuggestions(); }
+  }
+  function load() {
+    return BQEBoard.api("at-risk-watch").then(function (j) { loadedAt = Date.now(); setData(j); }).catch(function (e) {
+      if (!ROWS.length) el("genDate").textContent = "could not load (" + e.message + ")";
+    });
+  }
+  function showSignin(msg) { el("board").hidden = true; el("topbar").hidden = true; el("signin").hidden = false; el("signinMsg").textContent = msg || ""; }
+  function renderViewers(people) {
+    el("viewers").innerHTML = people.map(function (p) { return '<span class="viewer-dot' + (p.me ? " me" : "") + '" title="' + escapeHtml(p.name + (p.me ? " (you)" : "")) + '">' + escapeHtml(p.initials) + '</span>'; }).join("");
+  }
+  el("signInBtn").addEventListener("click", function () { el("signinMsg").textContent = ""; BQEBoard.signIn().catch(function (e) { showSignin(e.message); }); });
+  el("signOutBtn").addEventListener("click", function () { BQEBoard.signOut(); });
+  el("themeBtn").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = cur === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("atRiskWatch.theme", next); } catch (e) {}
+  });
+  try { var th = localStorage.getItem("atRiskWatch.theme"); if (th) document.documentElement.setAttribute("data-theme", th); } catch (e) {}
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && VIEWER && Date.now() - loadedAt > REFRESH_MS) load(); });
+  BQEBoard.start({
+    board: "at-risk-watch",
+    onSignIn: showSignin,
+    onReady: function (v) {
+      VIEWER = v; el("signin").hidden = true; el("board").hidden = false; el("topbar").hidden = false;
+      el("viewerName").innerHTML = "Viewing: <b>" + escapeHtml(v.name) + "</b>";
+      BQEBoard.presence(renderViewers);
+      load();
+      if (!refreshTimer) refreshTimer = setInterval(function () { if (!document.hidden) load(); }, REFRESH_MS);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>
